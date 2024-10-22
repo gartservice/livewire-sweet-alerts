@@ -2,7 +2,7 @@
 
 namespace Gartservice\LivewireSweetAlert;
 
-use Illuminate\Support\Str;
+
 
 trait LivewireSweetAlert
 {
@@ -12,15 +12,15 @@ trait LivewireSweetAlert
         string $title,
         string $html,
         string $icon = 'success',
-        array $options = [] // Optional SweetAlert options like didClose, willOpen
+        array $options = []
     ): void {
-        $jsOptions = json_encode(array_merge([
+        $json = $this->prepareJsOptions([
             'title' => $title,
-            'html' => $html,
-            'icon' => $icon,
-        ], $options));
-
-        $this->js("Swal.fire($jsOptions);");
+            'html'  => $html,
+            'icon'  => $icon,
+        ], $options);
+        // dd($json);
+        $this->js("Swal.fire($json);");
     }
 
     public function confirm(
@@ -31,49 +31,45 @@ trait LivewireSweetAlert
         string $cancelText = 'Cancel',
         string $onConfirmMethod = 'confirmed',
         string $onCancelMethod = 'cancelled',
-        array $callbacks = [] // Optional: didClose, didOpen, willOpen, etc.
+        array $callbacks = []
     ): void {
-        $token = Str::random(12);
-        $this->confirmTokens[$token] = $onConfirmMethod;
+        $payload = encrypt($onConfirmMethod);
 
-        $jsCallbacks = collect($callbacks)->map(fn($body, $hook) => "$hook: function() { $body }")
-                                        ->implode(",\n");
+        $json = $this->prepareJsOptions([
+            'title' => $title,
+            'html' => $html,
+            'icon' => $icon,
+            'confirmButtonText' => $confirmText,
+            'cancelButtonText' => $cancelText,
+            'showCancelButton' => true,
+            'allowEscapeKey' => true,
+            'focusCancel' => true,
+        ], $callbacks);
 
-        $js = <<<JS
-                Swal.fire({
-                    title: `$title`,
-                    html: `$html`,
-                    icon: `$icon`,
-                    confirmButtonText: `$confirmText`,
-                    cancelButtonText: `$cancelText`,
-                    showCancelButton: true,
-                    allowEscapeKey: true,
-                    focusCancel: true,
-                    $jsCallbacks
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        \$wire.handleConfirmedAction('$token');
-                    } else {
-                        \$wire.$onCancelMethod();
-                    }
-                });
-                JS;
-
-        $this->js($js);
+        $this->js(<<<JS
+            Swal.fire($json).then((result) => {
+                if (result.isConfirmed) {
+                    \$wire.handleConfirmedAction('$payload');
+                } else {
+                    \$wire.$onCancelMethod();
+                }
+            });
+        JS);
     }
 
-    public function handleConfirmedAction(string $token): void
+    public function handleConfirmedAction(string $encryptedMethodName): void
     {
-        if (!isset($this->confirmTokens[$token])) {
-            $this->alert('Invalid token', 'Confirmation token mismatch.', 'error');
+        try {
+            $method = decrypt($encryptedMethodName);
+        } catch (\Exception $e) {
+            $this->alert('Invalid token', 'Confirmation token could not be verified.', 'error');
             return;
         }
 
-        $method = $this->confirmTokens[$token];
-        unset($this->confirmTokens[$token]);
-
-        if (method_exists($this, $method)) {
+        if (method_exists(object_or_class: $this, method: $method)) {
             $this->$method();
+        } else {
+            $this->alert('Error', 'Callback method not found.', 'error');
         }
     }
 
@@ -86,5 +82,29 @@ trait LivewireSweetAlert
     {
         $formatted = json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
         return "<pre>{$formatted}</pre>";
+    }
+
+    protected function prepareJsOptions(array $base, array $extra): string
+    {
+        $jsFunctionKeys = ['didOpen', 'didClose', 'willOpen', 'willClose', 'preConfirm', 'inputValidator'];
+
+        $jsonOptions = [];
+        $rawCallbacks = [];
+
+        foreach (array_merge($base, $extra) as $key => $value) {
+            if (in_array($key, $jsFunctionKeys) && preg_match('/^\s*(function\s*\(|\(?\s*\)\s*=>)/', $value)) {
+                $rawCallbacks[$key] = $value;
+            } else {
+                $jsonOptions[$key] = $value;
+            }
+        }
+
+        $json = rtrim(json_encode($jsonOptions, JSON_UNESCAPED_SLASHES), '}');
+
+        foreach ($rawCallbacks as $key => $code) {
+            $json .= ", \"$key\": $code";
+        }
+
+        return $json . '}';
     }
 }
