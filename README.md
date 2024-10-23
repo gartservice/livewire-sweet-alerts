@@ -64,9 +64,114 @@ $this->confirm(
     'warning',
     'Yes, delete it!',
     'Cancel',
-    'deleteConfirmed()',
+    'deleteConfirmed()', // Make sure this method is not public (should be protected or private)
     'cancelled()'
 );
+```
+
+### Alert with Callbacks (didClose)
+
+```php
+$this->alert(
+    'Notice',
+    'Check your console.',
+    'info',
+    [
+        'didClose' => '() => { console.log("Alert was closed") }' // Must be a valid JS function string, e.g., '() => { ... }'
+    ]
+);
+```
+
+### Confirm Modal with Callbacks (didOpen, didClose)
+
+```php
+$this->confirm(
+    'Confirm Action',
+    'Do you want to proceed?',
+    'question',
+    'Proceed',
+    'Cancel',
+    'proceedConfirmed', // Make sure this method is not public (should be protected or private)
+    'cancelledAction',
+    [
+        'didOpen' => '() => { console.log("Opened!") }',
+        'didClose' => '() => { console.log("Closed!") }'
+    ]
+);
+```
+
+## 🧪 Full Demo Example
+
+### Component Class
+
+```php
+namespace App\Livewire;
+
+use Livewire\Component;
+use Gartservice\LivewireSweetAlert\LivewireSweetAlert;
+
+class SweetAlertDemo extends Component
+{
+    use LivewireSweetAlert;
+
+    public function showSimpleAlert()
+    {
+        // Any logic can be here
+        $this->alert('Hello!', 'This is a basic alert.', 'success');
+    }
+
+    public function showAlertWithCallback()
+    {
+        $this->alert('Notice', 'Check your console after closing.', 'info', [
+            'didClose' => '() => { console.log("Alert was closed!"); console.log("This is a callback function!"); }'
+        ]);
+    }
+
+    public function showConfirmAlert()
+    {
+        // Show confirm message before processing
+        $this->confirm(
+            'Are you sure?',
+            'This action is irreversible.',
+            'warning',
+            'Yes, go ahead!',
+            'Cancel',
+            'confirmedAction',
+            'cancelledAction'
+        );
+    }
+    // This method can be run only after confirm
+    protected function confirmedAction()
+    {
+        // Perform any additional logic after confirmation, such as auditing user actions
+        $this->alert('Confirmed', 'You agreed!', 'success');
+    }
+
+    public function cancelledAction()
+    {
+        // Show message if user canceled action
+        $this->alert('Cancelled', 'You backed out.', 'error');
+    }
+
+    public function render()
+    {
+        return view('livewire.sweet-alert-demo');
+    }
+}
+```
+
+### Blade View
+
+```blade
+<div class="p-6 space-y-4">
+    <button type="button" wire:click="showSimpleAlert()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">Simple Alert</button>
+
+    <button wire:click="showAlertWithCallback" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded">Alert with Callback</button>
+
+    <button wire:click="showConfirmAlert" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded">Confirmation</button>
+
+    <button wire:click="confirmedAction" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">Run Action Directly</button>
+</div>
 ```
 
 ## ✅ Compatibility
