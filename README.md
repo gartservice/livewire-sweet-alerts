@@ -2,6 +2,9 @@
 
 A Laravel 11+ / Livewire 3 trait to easily trigger [SweetAlert2](https://sweetalert2.github.io/) modals from PHP code.
 
+
+![Livewire Sweet Alerts Demo](preview.gif)
+
 ## 📦 Installation
 
 ```bash
